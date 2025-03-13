@@ -1,18 +1,28 @@
-//ESTO FUNCIONA CON EL PLUGIN ULTIMATE MEMBMER Y CON LA CONFIG SMTP CON USUARIO Y COTRASEÑA DEL HOST
-
+//ESTO FUNCIONA CON EL PLUGIN ULTIMATE MEMBMER Y CON LA CONFIG SMTP CON USUARIO Y CONTRASEÑA DEL HOST
 
 <?php
+// ADD MODDA 13.3.2025 APROBACION VIA EMAIL
+
+// Clave secreta para generar el hash
+define('CUSTOM_NONCE_SECRET', 'tu_clave_secreta_12345'); 
+
+function generar_nonce_personalizado($user_id, $action) {
+    return hash_hmac('sha256', $action . $user_id, CUSTOM_NONCE_SECRET);
+}
+
+// Enviar correo de aprobación
 function enviar_correo_aprobacion_admin($user_id) {
     $user = get_userdata($user_id);
-    $admin_email = 'elgallego.tienda@gmail.com';
+    $admin_email = ['damyperez8@gmail.com', 'tienda@elgallegotodomotor.com'];
+	
 
     $subject = '🔔 Nuevo usuario pendiente de aprobación';
 
-    // Generar nonce seguro
-    $approve_nonce = wp_create_nonce("approve_user_{$user_id}");
-    $reject_nonce = wp_create_nonce("reject_user_{$user_id}");
+    // Generar nonce personalizado
+    $approve_nonce = generar_nonce_personalizado($user_id, 'approve_user');
+    $reject_nonce = generar_nonce_personalizado($user_id, 'reject_user');
 
-    // Enlaces personalizados para aprobar o rechazar
+    // Enlaces personalizados
     $approve_link = site_url("?action=approve_user&user_id={$user_id}&nonce={$approve_nonce}");
     $reject_link = site_url("?action=reject_user&user_id={$user_id}&nonce={$reject_nonce}");
 
@@ -23,13 +33,20 @@ function enviar_correo_aprobacion_admin($user_id) {
     // Botones funcionales
     $message .= "<p>
         <a href='{$approve_link}' style='padding: 10px 15px; background-color: green; color: white; text-decoration: none; border-radius: 5px; margin-right: 10px;'>✅ Aprobar Usuario</a>
+        <br><br>
         <a href='{$reject_link}' style='padding: 10px 15px; background-color: red; color: white; text-decoration: none; border-radius: 5px;'>❌ Rechazar Usuario</a>
     </p>";
 
     $headers = array('Content-Type: text/html; charset=UTF-8');
-    wp_mail($admin_email, $subject, $message, $headers);
+    wp_mail(implode(',', $admin_email), $subject, $message, $headers);
 }
 add_action('um_registration_complete', 'enviar_correo_aprobacion_admin', 10, 1);
+
+// Función para validar nonce personalizado
+function validar_nonce_personalizado($user_id, $nonce, $action) {
+    $expected_nonce = generar_nonce_personalizado($user_id, $action);
+    return hash_equals($expected_nonce, $nonce);
+}
 
 // Procesar aprobación de usuario
 function aprobar_usuario() {
@@ -40,7 +57,7 @@ function aprobar_usuario() {
     $user_id = intval($_GET['user_id']);
     $nonce = sanitize_text_field($_GET['nonce']);
 
-    if (!wp_verify_nonce($nonce, "approve_user_{$user_id}")) {
+    if (!validar_nonce_personalizado($user_id, $nonce, 'approve_user')) {
         wp_die('❌ Acción no permitida. (Nonce inválido)');
     }
 
@@ -62,7 +79,7 @@ function rechazar_usuario() {
     $user_id = intval($_GET['user_id']);
     $nonce = sanitize_text_field($_GET['nonce']);
 
-    if (!wp_verify_nonce($nonce, "reject_user_{$user_id}")) {
+    if (!validar_nonce_personalizado($user_id, $nonce, 'reject_user')) {
         wp_die('❌ Acción no permitida. (Nonce inválido)');
     }
 
@@ -75,5 +92,4 @@ add_action('init', function () {
         rechazar_usuario();
     }
 });
-
 <?php
